@@ -1,0 +1,230 @@
+#include <opencv2/opencv.hpp>
+#include <stdio.h>
+#include <thread>
+
+#include "main.h"
+
+using namespace cv;
+
+int main(int argc, char *argv[]) {
+  if (argc != 2) {
+    printf("Give video file name\n");
+  }
+
+  VideoCapture cap(argv[1]);
+  if (!cap.isOpened()) {
+    perror("error in capture");
+    exit(-1);
+  }
+
+  while (1) {
+    Mat frame;
+    bool end = cap.read(frame);
+    if (!end) {
+      break;
+    }
+
+    // divide to 4
+
+    
+    int midRow = frame.rows / 2;
+    int midCol = frame.cols / 2;
+
+
+    
+    Mat topLeft = frame(Rect(0, 0, midCol + 1, midRow + 1));
+
+    Mat topRight = frame(Rect(midCol - 1, 0, \
+			      frame.cols - midCol + 1, midRow + 1));
+
+    Mat botLeft = frame(Rect(0, midRow - 1, \
+			     midCol + 1, frame.rows - midRow + 1));
+
+    Mat botRight = frame(Rect(midCol - 1, midRow - 1, \
+			      frame.cols - midCol + 1, \
+			      frame.rows - midRow + 1));
+
+
+    /*
+    Mat topLeft = frame(Rect(0, 0, midCol, midRow));
+
+    Mat topRight = frame(Rect(midCol, 0, \
+			      frame.cols - midCol, midRow));
+
+    Mat botLeft = frame(Rect(0, midRow, \
+			     midCol, frame.rows - midRow));
+
+    Mat botRight = frame(Rect(midCol, midRow, \
+			      frame.cols - midCol, \
+			      frame.rows - midRow));
+    
+    */
+    
+    Mat output(frame.rows, frame.cols, CV_8UC1);
+
+    std::cout << "midCol: " << midCol << "\n";
+    std::cout << "midCol: " << midRow << "\n";
+
+    std::cout << "Cols: " << frame.cols << "\n";
+    std::cout << "Rows: " << frame.rows << "\n";
+    
+    fflush(stdout);
+    
+    // run 4 threads
+    std::thread t0(frametosobel, std::ref(topLeft), 0, std::ref(output));
+    std::thread t1(frametosobel, std::ref(topRight), 1, std::ref(output));
+    std::thread t2(frametosobel, std::ref(botLeft), 2, std::ref(output));
+    std::thread t3(frametosobel, std::ref(botRight), 3, std::ref(output));
+
+    std::cout << "threads made\n";
+    fflush(stdout);
+    
+    /*
+    std::thread t1(frametosobel, &topLeft, 1, &output);
+    std::thread t2(frametosobel, &topLeft, 2, &output);
+    std::thread t3(frametosobel, &topLeft, 3, &output);
+    */
+    
+    // wait on 4 threads
+    t0.join();
+    t1.join();
+    t2.join();
+    t3.join();
+
+    std::cout << "joined threads\n";
+    
+    namedWindow("Frame", WINDOW_NORMAL);
+    resizeWindow("Frame", 480, 360);
+    cv::imshow("Frame", frame);
+
+    namedWindow("Sobel Frame", WINDOW_NORMAL);
+    resizeWindow("Sobel Frame", 480, 360);
+    cv::imshow("Sobel Frame", output);
+
+    if (cv::waitKey(1) > 0) {
+      break;
+    }
+  }
+
+  return 0;
+}
+
+
+void frametosobel(Mat &input, int ID, Mat &output) {
+  
+  Mat gray = to442_grayscale(input);
+  Mat sobel =  to442_sobel(gray);
+
+  /*
+  int xOffset = (ID % 2) * sobel.cols;
+  int yOffset = (ID / 2) * sobel.rows;
+
+
+  cv::Rect myRect(xOffset, yOffset, sobel.cols, sobel.rows);
+
+  
+  
+  std::cout << "created rect" << ID << "\n";
+  std::cout << "xOff: " << xOffset << "\n";
+  std::cout << "yOff: " << yOffset << "\n";
+  std::cout << "cols: " << sobel.cols << "\n";
+  std::cout << "rows: " << sobel.rows << "\n";
+  fflush(stdout);
+  
+  */
+  
+  int xOffset = (ID % 2) * (sobel.cols - 1);
+  int yOffset = (ID / 2) * (sobel.rows - 1);
+
+
+  cv::Rect outRect(xOffset, yOffset, sobel.cols - 1, sobel.rows - 1);
+
+  
+  
+  std::cout << "created rect" << ID << "\n";
+  std::cout << "xOff: " << xOffset << "\n";
+  std::cout << "yOff: " << yOffset << "\n";
+  std::cout << "cols: " << sobel.cols - 1 << "\n";
+  std::cout << "rows: " << sobel.rows - 1 << "\n";
+  fflush(stdout);
+
+  Rect outSobelRect(ID % 2, ID / 2, sobel.cols - 1, sobel.rows - 1);
+
+  Mat outSobel = sobel(outSobelRect).clone();
+
+
+  std::cout << "Made it to copyTo" << ID << "\n";
+  fflush(stdout);
+  
+		
+  
+  outSobel.copyTo(output(outRect));
+
+  std::cout << "Made it to end of thread" << ID << "\n";
+  fflush(stdout);
+  
+}
+
+
+cv::Mat to442_grayscale(cv::Mat &input) {
+  cv::Mat grayMat(input.rows, input.cols, CV_8UC1);
+
+  int y;
+  for (y = 0; y < input.rows; y++) {
+    int x;
+    for (x = 0; x < input.cols; x++ ) {
+      cv::Vec3b pixel = input.at<cv::Vec3b>(y, x);
+
+      uint8_t grayVal = static_cast<uint8_t>(.2126 * pixel[2]) + (.7152 * pixel[1]) + (.0722 * pixel[0]);
+
+      //cv::Scalar grayPixel = cvScalar(grayVal);
+      grayMat.at<uint8_t>(y, x) = grayVal;
+    }
+  }
+
+  return grayMat;
+}
+
+
+cv::Mat to442_sobel(cv::Mat& input) {
+  cv::Mat sobel(input.rows, input.cols, CV_8UC1);
+  
+  int sobelX[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
+  int sobelY[3][3] = {{1, 0, -1}, {2, 0, -2}, {1, 0, -1}};
+
+  cv::Scalar pixel;
+  
+  int y;
+  for (y = 1; y < input.rows - 1; y++) {
+    int x;
+    for (x = 1; x < input.cols - 1; x++) {
+      int16_t sumX = 0;
+      int16_t sumY = 0;
+
+      int i;
+      for (i = -1; i < 2; i++) {
+	int j;
+	for (j = -1; j < 2; j++) {
+	  uchar pixel = input.at<uchar>(y + i, x + j);
+	  sumX = sumX + (pixel * sobelX[i + 1][j + 1]);
+	  sumY = sumY + (pixel * sobelY[i + 1][j + 1]);
+	}
+      }
+
+      int out = abs(sumX) + abs(sumY);
+
+      if (out > 255) {
+	out = 255;
+      }
+
+      if (out < 0) {
+	out = 0;
+      }
+
+      sobel.at<uchar>(y, x) = static_cast<uchar>(out);
+    }
+  }
+
+  return sobel;
+}
+

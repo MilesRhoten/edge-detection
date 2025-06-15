@@ -1,0 +1,101 @@
+#include <opencv2/opencv.hpp>
+#include <stdio.h>
+
+using namespace cv;
+
+cv::Mat to442_grayscale(cv::Mat &input) {
+  cv::Mat grayMat(input.rows, input.cols, CV_8UC1);
+
+  int y;
+  for (y = 0; y < input.rows; y++) {
+    int x;
+    for (x = 0; x < input.cols; x++ ) {
+      cv::Vec3b pixel = input.at<cv::Vec3b>(y, x);
+
+      uint8_t grayVal = static_cast<uint8_t>(.2126 * pixel[2]) + (.7152 * pixel[1]) + (.0722 * pixel[0]);
+
+      //cv::Scalar grayPixel = cvScalar(grayVal);
+      grayMat.at<uint8_t>(y, x) = grayVal;
+    }
+  }
+
+  return grayMat;
+}
+
+cv::Mat to442_sobel(cv::Mat& input) {
+  cv::Mat sobel(input.rows, input.cols, CV_8UC1);
+  
+  int sobelX[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
+  int sobelY[3][3] = {{1, 0, -1}, {2, 0, -2}, {1, 0, -1}};
+
+  cv::Scalar pixel;
+  
+  int y;
+  for (y = 1; y < input.rows - 1; y++) {
+    int x;
+    for (x = 1; x < input.cols - 1; x++) {
+      uchar sumX = 0;
+      uchar sumY = 0;
+
+      int i;
+      for (i = -1; i < 2; i++) {
+	int j;
+	for (j = -1; j < 2; j++) {
+	  uchar pixel = input.at<uchar>(y + i, x + j);
+	  sumX = sumX + (pixel * sobelX[i + 1][j + 1]);
+	  sumY = sumY + (pixel * sobelY[i + 1][j + 1]);
+	}
+      }
+
+      int out = sumX + sumY;
+
+      if (out > 255) {
+	out = 255;
+      }
+
+      if (out < 0) {
+	out = 0;
+      }
+
+      sobel.at<uchar>(y, x) = static_cast<uchar>(out);
+    }
+  }
+
+  return sobel;
+}
+
+
+int main(int argc, char *argv[]) {
+  if (argc != 2) {
+    printf("Give video file name\n");
+  }
+
+  VideoCapture cap(argv[1]);
+  if (!cap.isOpened()) {
+    perror("error in capture");
+    exit(-1);
+  }
+
+  while (1) {
+    Mat frame;
+    bool end = cap.read(frame);
+    if (!end) {
+      break;
+    }
+    
+    Mat grayFrame = to442_grayscale(frame);
+    Mat sobelFrame = to442_sobel(grayFrame);
+
+    cv::imshow("Frame", frame);
+
+    cv::imshow("Gray Frame", grayFrame);
+    
+    cv::imshow("Sobel Frame", sobelFrame);
+
+    if (cv::waitKey(1) > 0) {
+      break;
+    }
+  }
+
+  return 0;
+}

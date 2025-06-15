@@ -1,0 +1,9 @@
+The first thing i did is changed .at to .data for both grayscale and sobel
+
+Changed from processing topleft topright bottomleft bottomright
+to doing 4 horizontal chunks as described in class
+
+
+Removed floating point math in greyscale function
+
+removed unecessary matrix creation and copy in wrapper function

@@ -1,0 +1,14 @@
+#ifndef MAINH
+#define MAINH
+
+#include <opencv2/opencv.hpp>
+
+using namespace cv;
+
+Mat frametosobel(Mat &input, int ID, Mat &output);
+
+Mat to442_grayscale(Mat &input);
+
+Mat to442_sobel(Mat &input);
+
+#endif
